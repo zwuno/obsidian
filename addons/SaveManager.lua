@@ -18,7 +18,9 @@ local isfile_copy = clonefunction(isfile)
 local listfiles_copy = clonefunction(listfiles)
 
 local isfolder_success, isfolder_result = pcall(function()
-    return isfolder_copy("test" .. tostring(math.random(1000000, 9999999)))
+    return isfolder_copy(
+        "test" .. tostring(math.random(1000000, 9999999))
+    )
 end)
 
 if not isfolder_success or typeof(isfolder_result) ~= "boolean" then
@@ -56,7 +58,7 @@ function SaveManager:SetLibrary(Library)
     SaveManager.Library = Library
 end
 
---// Element Parser
+--// Special Value Parser
 local SpecialValueParser = {
     UDim2 = {
         Encode = function(Value: UDim2)
@@ -74,30 +76,27 @@ local SpecialValueParser = {
         end,
 
         Decode = function(Data: any)
-            local DataType = typeof(Data)
-
-            if DataType == "table" then
-                if not Data.X or not Data.Y then
-                    return nil
-                end
-
-                return UDim2.new(
-                    Data.X.Scale,
-                    Data.X.Offset,
-                    Data.Y.Scale,
-                    Data.Y.Offset
-                )
-            end
-
-            if DataType == "UDim2" then
+            if typeof(Data) == "UDim2" then
                 return Data
             end
 
-            return nil
+            if typeof(Data) ~= "table"
+                or typeof(Data.X) ~= "table"
+                or typeof(Data.Y) ~= "table" then
+                return nil
+            end
+
+            return UDim2.new(
+                Data.X.Scale,
+                Data.X.Offset,
+                Data.Y.Scale,
+                Data.Y.Offset
+            )
         end
     }
 }
 
+--// Element Parser
 local ElementParser = {}
 
 do
@@ -133,17 +132,18 @@ do
         }
     end
 
+    --// Toggle
     CreateParser(
         "Toggle",
         "Toggles",
 
-        function(Index: string, Toggle: any)
+        function(_, Toggle)
             return {
                 value = Toggle.Value
             }
         end,
 
-        function(Element: any?, Data: any)
+        function(Element, Data)
             if not Element then
                 return
             end
@@ -157,17 +157,18 @@ do
         end
     )
 
+    --// Slider
     CreateParser(
         "Slider",
         "Options",
 
-        function(Index: string, Slider: any)
+        function(_, Slider)
             return {
                 value = tostring(Slider.Value)
             }
         end,
 
-        function(Element: any?, Data: any)
+        function(Element, Data)
             if not Element then
                 return
             end
@@ -181,18 +182,19 @@ do
         end
     )
 
+    --// Dropdown
     CreateParser(
         "Dropdown",
         "Options",
 
-        function(Index: string, Dropdown: any)
+        function(_, Dropdown)
             return {
                 value = Dropdown.Value,
                 multi = Dropdown.Multi
             }
         end,
 
-        function(Element: any?, Data: any)
+        function(Element, Data)
             if not Element then
                 return
             end
@@ -206,19 +208,24 @@ do
         end
     )
 
+    --// ColorPicker
     CreateParser(
         "ColorPicker",
         "Options",
 
-        function(Index: string, ColorPicker: any)
+        function(_, ColorPicker)
             return {
                 value = ColorPicker.Value:ToHex(),
                 transparency = ColorPicker.Transparency
             }
         end,
 
-        function(Element: any?, Data: any)
+        function(Element, Data)
             if not Element then
+                return
+            end
+
+            if typeof(Data.value) ~= "string" then
                 return
             end
 
@@ -229,11 +236,12 @@ do
         end
     )
 
+    --// KeyPicker
     CreateParser(
         "KeyPicker",
         "Options",
 
-        function(Index: string, KeyPicker: any)
+        function(_, KeyPicker)
             return {
                 mode = KeyPicker.Mode,
                 key = KeyPicker.Value,
@@ -242,7 +250,7 @@ do
             }
         end,
 
-        function(Element: any?, Data: any)
+        function(Element, Data)
             if not Element then
                 return
             end
@@ -253,24 +261,27 @@ do
                 Data.modifiers
             })
 
-            if Data.mode == "Toggle" and Data.toggled ~= nil then
+            if Data.mode == "Toggle"
+                and Data.toggled ~= nil then
+
                 Element.Toggled = Data.toggled
                 Element:Update()
             end
         end
     )
 
+    --// Input
     CreateParser(
         "Input",
         "Options",
 
-        function(Index: string, Input: any)
+        function(_, Input)
             return {
                 text = Input.Value
             }
         end,
 
-        function(Element: any?, Data: any)
+        function(Element, Data)
             if not Element then
                 return
             end
@@ -288,18 +299,19 @@ do
         end
     )
 
+    --// Groupbox
     CreateParser(
         "Groupbox",
         "Tabs",
 
-        function(Index: string, Groupbox: any, TabIndex: string)
+        function(_, Groupbox, TabIndex)
             return {
                 collapsed = Groupbox.Collapsed,
                 tabIdx = TabIndex
             }
         end,
 
-        function(_, Data: any)
+        function(_, Data)
             local TabIndex = Data.tabIdx
             local Index = Data.idx
 
@@ -350,7 +362,7 @@ local function IsValidFolderPath(Name: string): boolean
         and not Name:find('[<>:"|%?%*%z]')
 end
 
---// Folder helpers
+--// Folder Helpers
 local function SplitPath(Path: string): {string}
     local Result = {}
     local Current = ""
@@ -400,7 +412,7 @@ local function GetCurrentSettingsPath(): false | string
     return GetFolderPath()
 end
 
---// File helpers
+--// File Helpers
 local function GetConfigPath(ConfigName: string): false | string
     local SettingsPath = GetCurrentSettingsPath()
 
@@ -418,7 +430,8 @@ end
 local function DoesConfigExist(ConfigName: string): boolean
     local ConfigPath = GetConfigPath(ConfigName)
 
-    return ConfigPath ~= false and isfile(ConfigPath)
+    return ConfigPath ~= false
+        and isfile(ConfigPath)
 end
 
 local function GetAutoloadPath(): false | string
@@ -457,22 +470,6 @@ function SaveManager:SetIgnoreIndexes(Indexes: {string}?)
     end
 end
 
-function SaveManager:IgnoreThemeSettings()
-    SaveManager:SetIgnoreIndexes({
-        "BackgroundColor",
-        "MainColor",
-        "AccentColor",
-        "OutlineColor",
-        "FontColor",
-        "FontFace",
-        "BackgroundImage",
-
-        "ThemeManager_ThemeList",
-        "ThemeManager_CustomThemeList",
-        "ThemeManager_CustomThemeName"
-    })
-end
-
 --// Folders
 function SaveManager:GetPaths(): {string}
     local SettingsPath = GetCurrentSettingsPath()
@@ -492,12 +489,14 @@ function SaveManager:BuildFolderTree()
     end
 
     for _, Path in Paths do
-        if not isfolder(Path) then
-            local Success = pcall(makefolder, Path)
+        if isfolder(Path) then
+            continue
+        end
 
-            if not Success and not isfolder(Path) then
-                return false
-            end
+        local Success = pcall(makefolder, Path)
+
+        if not Success and not isfolder(Path) then
+            return false
         end
     end
 
@@ -506,30 +505,6 @@ end
 
 function SaveManager:CheckFolderTree()
     return SaveManager:BuildFolderTree()
-end
-
-function SaveManager:CheckSubFolder(CreateFolder: boolean)
-    local SubFolderPath = GetSubFolderPath()
-
-    if SubFolderPath == false then
-        return false
-    end
-
-    local Exists = isfolder(SubFolderPath)
-
-    if not CreateFolder then
-        return Exists
-    end
-
-    if not Exists then
-        local Success = pcall(makefolder, SubFolderPath)
-
-        if not Success and not isfolder(SubFolderPath) then
-            return false
-        end
-    end
-
-    return true
 end
 
 function SaveManager:SetFolder(Folder: string)
@@ -601,7 +576,6 @@ function SaveManager:SaveJSON(ConfigName)
     local CurrentData = {
         timestamp = os.date("%d.%m.%Y %H:%M:%S"),
         name = ConfigName or "",
-
         objects = {},
 
         keybindMenu = if Library.KeybindFrame then {
@@ -625,14 +599,12 @@ function SaveManager:SaveJSON(ConfigName)
 
         local Parser = ElementParser[Toggle.Type]
 
-        if not Parser then
-            continue
+        if Parser then
+            table.insert(
+                CurrentData.objects,
+                Parser.Save(Index, Toggle)
+            )
         end
-
-        table.insert(
-            CurrentData.objects,
-            Parser.Save(Index, Toggle)
-        )
     end
 
     --// Options
@@ -647,14 +619,12 @@ function SaveManager:SaveJSON(ConfigName)
 
         local Parser = ElementParser[Option.Type]
 
-        if not Parser then
-            continue
+        if Parser then
+            table.insert(
+                CurrentData.objects,
+                Parser.Save(Index, Option)
+            )
         end
-
-        table.insert(
-            CurrentData.objects,
-            Parser.Save(Index, Option)
-        )
     end
 
     --// Groupboxes
@@ -670,18 +640,16 @@ function SaveManager:SaveJSON(ConfigName)
 
             local Parser = ElementParser.Groupbox
 
-            if not Parser then
-                continue
-            end
-
-            table.insert(
-                CurrentData.objects,
-                Parser.Save(
-                    Index,
-                    Groupbox,
-                    TabIndex
+            if Parser then
+                table.insert(
+                    CurrentData.objects,
+                    Parser.Save(
+                        Index,
+                        Groupbox,
+                        TabIndex
+                    )
                 )
-            )
+            end
         end
     end
 
@@ -698,7 +666,9 @@ function SaveManager:SaveJSON(ConfigName)
     return EncodedData, true
 end
 
-function SaveManager:Save(ConfigName: string): (boolean, string?)
+function SaveManager:Save(
+    ConfigName: string
+): (boolean, string?)
     if IsStringEmpty(ConfigName) then
         return false, "Invalid config name provided"
     end
@@ -717,11 +687,11 @@ function SaveManager:Save(ConfigName: string): (boolean, string?)
         return false, "Failed to create settings folder"
     end
 
-    local EncodedData, SuccessEncode, EncodeErrorMessage =
+    local EncodedData, SuccessEncode, EncodeError =
         SaveManager:SaveJSON(ConfigName)
 
     if not SuccessEncode then
-        return false, EncodeErrorMessage
+        return false, EncodeError
     end
 
     local SuccessWrite, ErrorMessage =
@@ -763,26 +733,25 @@ function SaveManager:LoadJSON(Content: string)
 
         table.sort(
             Decoded.objects,
-            function(a, b)
-                local aIndex =
-                    table.find(LoadingOrder, a.type)
+            function(A, B)
+                local AIndex =
+                    table.find(LoadingOrder, A.type)
                     or math.huge
 
-                local bIndex =
-                    table.find(LoadingOrder, b.type)
+                local BIndex =
+                    table.find(LoadingOrder, B.type)
                     or math.huge
 
-                return aIndex < bIndex
+                return AIndex < BIndex
             end
         )
     end
 
-    --// Keybind menu
+    --// Keybind Menu
     if Library.KeybindFrame
         and typeof(Decoded.keybindMenu) == "table" then
 
         local Data = Decoded.keybindMenu
-
         local IsVisible = Data.visible == true
 
         local Position =
@@ -831,7 +800,9 @@ function SaveManager:LoadJSON(Content: string)
     return true
 end
 
-function SaveManager:Load(ConfigName: string): (boolean, string?)
+function SaveManager:Load(
+    ConfigName: string
+): (boolean, string?)
     if IsStringEmpty(ConfigName) then
         return false, "No config is selected"
     end
@@ -853,7 +824,9 @@ function SaveManager:Load(ConfigName: string): (boolean, string?)
     return SaveManager:LoadJSON(Content)
 end
 
-function SaveManager:Delete(ConfigName: string): (boolean, string?)
+function SaveManager:Delete(
+    ConfigName: string
+): (boolean, string?)
     if IsStringEmpty(ConfigName) then
         return false, "No config is selected"
     end
@@ -988,7 +961,7 @@ function SaveManager:LoadAutoloadConfig()
     )
 end
 
-function SaveManager:DeleteAutoLoadConfig(): (boolean, string?)
+function SaveManager:DeleteAutoLoadConfig()
     SaveManager:CheckFolderTree()
 
     local AutoloadPath = GetAutoloadPath()
@@ -999,7 +972,6 @@ function SaveManager:DeleteAutoLoadConfig(): (boolean, string?)
 
     if not isfile(AutoloadPath) then
         SaveManager.AutoloadConfig = nil
-
         return false, "Autoload config is not set"
     end
 
@@ -1015,7 +987,7 @@ function SaveManager:DeleteAutoLoadConfig(): (boolean, string?)
     return true
 end
 
---// Dialog
+--// Confirmation Dialog
 local function Confirm(
     Index: string,
     Title: string,
@@ -1054,10 +1026,7 @@ local function Confirm(
 end
 
 --// Configuration UI
-function SaveManager:BuildConfigSection(
-    Tab: any,
-    IconName: string?
-)
+function SaveManager:BuildConfigSection(Tab: any)
     assert(
         SaveManager.Library,
         "Library is not set, call SaveManager:SetLibrary(Library) first."
@@ -1070,7 +1039,7 @@ function SaveManager:BuildConfigSection(
 
     local ConfigNameInput
     local ConfigList
-    local AutoloadConfigLabel
+    local AutoloadLabel
 
     local function Notify(Message)
         SaveManager.Library:Notify(Message)
@@ -1084,16 +1053,15 @@ function SaveManager:BuildConfigSection(
         ConfigList:SetValue(nil)
     end
 
-    local function RefreshAutoloadLabel()
-        local ConfigName =
-            SaveManager:GetAutoloadConfig()
+    local function RefreshAutoload()
+        local Name = SaveManager:GetAutoloadConfig()
 
-        if ConfigName and ConfigName ~= "none" then
-            AutoloadConfigLabel:SetText(
-                "Autoload: " .. ConfigName
+        if Name and Name ~= "none" then
+            AutoloadLabel:SetText(
+                "Autoload: " .. Name
             )
         else
-            AutoloadConfigLabel:SetText(
+            AutoloadLabel:SetText(
                 "Autoload: None"
             )
         end
@@ -1112,27 +1080,23 @@ function SaveManager:BuildConfigSection(
     ConfigurationBox:AddButton(
         "Create",
         function()
-            local ConfigName =
-                ConfigNameInput.Value
+            local Name = ConfigNameInput.Value
 
-            if IsStringEmpty(ConfigName) then
-                Notify(
-                    "Configuration name cannot be empty."
-                )
-
+            if IsStringEmpty(Name) then
+                Notify("Configuration name cannot be empty.")
                 return
             end
 
-            if string.lower(ConfigName) == "autoload" then
+            if string.lower(Name) == "autoload" then
                 Notify("Invalid config name provided.")
                 return
             end
 
-            if DoesConfigExist(ConfigName) then
+            if DoesConfigExist(Name) then
                 Notify(
                     string.format(
                         "Config %q already exists. Use Save to overwrite it.",
-                        ConfigName
+                        Name
                     )
                 )
 
@@ -1140,13 +1104,13 @@ function SaveManager:BuildConfigSection(
             end
 
             local Success, ErrorMessage =
-                SaveManager:Save(ConfigName)
+                SaveManager:Save(Name)
 
             if not Success then
                 Notify(
                     string.format(
                         "Failed to create config %q: %s",
-                        ConfigName,
+                        Name,
                         ErrorMessage
                     )
                 )
@@ -1157,12 +1121,12 @@ function SaveManager:BuildConfigSection(
             Notify(
                 string.format(
                     "Successfully created config %q",
-                    ConfigName
+                    Name
                 )
             )
 
             RefreshList()
-            ConfigList:SetValue(ConfigName)
+            ConfigList:SetValue(Name)
         end
     )
 
@@ -1201,9 +1165,9 @@ function SaveManager:BuildConfigSection(
     ConfigurationBox:AddButton(
         "Load",
         function()
-            local ConfigName = ConfigList.Value
+            local Name = ConfigList.Value
 
-            if IsStringEmpty(ConfigName) then
+            if IsStringEmpty(Name) then
                 Notify("Please select a config first.")
                 return
             end
@@ -1211,21 +1175,23 @@ function SaveManager:BuildConfigSection(
             Confirm(
                 "SaveManager_LoadConfig",
                 "Load config",
+
                 string.format(
                     "Are you sure you want to load %q? Your current settings will be overwritten.",
-                    ConfigName
+                    Name
                 ),
+
                 "Load",
 
                 function()
                     local Success, ErrorMessage =
-                        SaveManager:Load(ConfigName)
+                        SaveManager:Load(Name)
 
                     if not Success then
                         Notify(
                             string.format(
                                 "Failed to load config %q: %s",
-                                ConfigName,
+                                Name,
                                 ErrorMessage
                             )
                         )
@@ -1236,7 +1202,7 @@ function SaveManager:BuildConfigSection(
                     Notify(
                         string.format(
                             "Successfully loaded config %q",
-                            ConfigName
+                            Name
                         )
                     )
                 end
@@ -1248,9 +1214,9 @@ function SaveManager:BuildConfigSection(
     ConfigurationBox:AddButton(
         "Save",
         function()
-            local ConfigName = ConfigList.Value
+            local Name = ConfigList.Value
 
-            if IsStringEmpty(ConfigName) then
+            if IsStringEmpty(Name) then
                 Notify("Please select a config first.")
                 return
             end
@@ -1258,21 +1224,23 @@ function SaveManager:BuildConfigSection(
             Confirm(
                 "SaveManager_SaveConfig",
                 "Save config",
+
                 string.format(
                     "Are you sure you want to overwrite %q with your current settings?",
-                    ConfigName
+                    Name
                 ),
+
                 "Save",
 
                 function()
                     local Success, ErrorMessage =
-                        SaveManager:Save(ConfigName)
+                        SaveManager:Save(Name)
 
                     if not Success then
                         Notify(
                             string.format(
                                 "Failed to save config %q: %s",
-                                ConfigName,
+                                Name,
                                 ErrorMessage
                             )
                         )
@@ -1283,7 +1251,7 @@ function SaveManager:BuildConfigSection(
                     Notify(
                         string.format(
                             "Successfully saved config %q",
-                            ConfigName
+                            Name
                         )
                     )
                 end
@@ -1295,9 +1263,9 @@ function SaveManager:BuildConfigSection(
     ConfigurationBox:AddButton(
         "Delete",
         function()
-            local ConfigName = ConfigList.Value
+            local Name = ConfigList.Value
 
-            if IsStringEmpty(ConfigName) then
+            if IsStringEmpty(Name) then
                 Notify("Please select a config first.")
                 return
             end
@@ -1305,21 +1273,23 @@ function SaveManager:BuildConfigSection(
             Confirm(
                 "SaveManager_DeleteConfig",
                 "Delete config",
+
                 string.format(
                     "Are you sure you want to delete %q? This cannot be undone.",
-                    ConfigName
+                    Name
                 ),
+
                 "Delete",
 
                 function()
                     local Success, ErrorMessage =
-                        SaveManager:Delete(ConfigName)
+                        SaveManager:Delete(Name)
 
                     if not Success then
                         Notify(
                             string.format(
                                 "Failed to delete config %q: %s",
-                                ConfigName,
+                                Name,
                                 ErrorMessage
                             )
                         )
@@ -1330,12 +1300,12 @@ function SaveManager:BuildConfigSection(
                     Notify(
                         string.format(
                             "Successfully deleted config %q",
-                            ConfigName
+                            Name
                         )
                     )
 
                     RefreshList()
-                    RefreshAutoloadLabel()
+                    RefreshAutoload()
                 end
             )
         end
@@ -1345,23 +1315,21 @@ function SaveManager:BuildConfigSection(
     ConfigurationBox:AddButton(
         "Set As Autoload",
         function()
-            local ConfigName = ConfigList.Value
+            local Name = ConfigList.Value
 
-            if IsStringEmpty(ConfigName) then
+            if IsStringEmpty(Name) then
                 Notify("Please select a config first.")
                 return
             end
 
             local Success, ErrorMessage =
-                SaveManager:SaveAutoloadConfig(
-                    ConfigName
-                )
+                SaveManager:SaveAutoloadConfig(Name)
 
             if not Success then
                 Notify(
                     string.format(
                         "Failed to set autoload config %q: %s",
-                        ConfigName,
+                        Name,
                         ErrorMessage
                     )
                 )
@@ -1372,12 +1340,12 @@ function SaveManager:BuildConfigSection(
             Notify(
                 string.format(
                     "Successfully set %q as autoload",
-                    ConfigName
+                    Name
                 )
             )
 
             RefreshList()
-            RefreshAutoloadLabel()
+            RefreshAutoload()
         end
     )
 
@@ -1389,6 +1357,7 @@ function SaveManager:BuildConfigSection(
                 "SaveManager_RemoveAutoload",
                 "Remove autoload",
                 "Are you sure you want to remove the current autoload config?",
+
                 "Remove",
 
                 function()
@@ -1411,31 +1380,28 @@ function SaveManager:BuildConfigSection(
                     )
 
                     RefreshList()
-                    RefreshAutoloadLabel()
+                    RefreshAutoload()
                 end
             )
         end
     )
 
-    --// Status
-    AutoloadConfigLabel =
+    AutoloadLabel =
         ConfigurationBox:AddLabel(
             "Autoload: None",
             true
         )
 
-    --// Ignore SaveManager UI
     SaveManager:SetIgnoreIndexes({
         "SaveManager_ConfigName",
         "SaveManager_ConfigList"
     })
 
-    RefreshAutoloadLabel()
+    RefreshAutoload()
 
     return ConfigurationBox
 end
 
---// Initialize
 SaveManager:BuildFolderTree()
 
 return SaveManager
