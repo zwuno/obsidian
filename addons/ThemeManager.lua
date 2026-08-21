@@ -63,31 +63,31 @@ function ThemeManager:ApplyToGroupbox(Groupbox: any)
     ThemeManager:CreateColorPicker(
         Groupbox,
         "BackgroundColor",
-        "Background color"
+        "Background"
     )
 
     ThemeManager:CreateColorPicker(
         Groupbox,
         "MainColor",
-        "Main color"
+        "Main"
     )
 
     ThemeManager:CreateColorPicker(
         Groupbox,
         "AccentColor",
-        "Accent color"
+        "Accent"
     )
 
     ThemeManager:CreateColorPicker(
         Groupbox,
         "OutlineColor",
-        "Outline color"
+        "Outline"
     )
 
     ThemeManager:CreateColorPicker(
         Groupbox,
         "FontColor",
-        "Font color"
+        "Font"
     )
 
     return Groupbox
@@ -99,8 +99,8 @@ function ThemeManager:ApplyToTab(
 )
     local Groupbox = Tab:AddGroupbox({
         Side = "Left",
-        Name = "Themes",
-        IconName = IconName or "paintbrush"
+        Name = "Theme",
+        IconName = nil,
     })
 
     return ThemeManager:ApplyToGroupbox(Groupbox)
